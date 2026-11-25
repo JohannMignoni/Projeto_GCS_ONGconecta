@@ -42,7 +42,7 @@ describe('validarDoacao', () => {
 
   test('nome com menos de 2 caracteres é rejeitado', () => {
     expect(validarDoacao({ ...valida, nome: 'A' })).toContain(
-      'mensagem errada de proposito',
+      'nome é obrigatório (mínimo 2 caracteres)',
     );
   });
 });
