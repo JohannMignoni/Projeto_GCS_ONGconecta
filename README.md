@@ -1,6 +1,6 @@
 # Projeto GCS — ONGConecta
 
-## Estrutura do Projeto
+## Estrutura do Projeto:
 
 ```text
 Projeto_GCS_ONGconecta/
@@ -15,7 +15,7 @@ Projeto_GCS_ONGconecta/
     └── .github/workflows/    # Pipelines de CI/CD (GitHub Actions)
 ```
 
-## Visão Geral do Código
+## Visão Geral do Código:
 
 - **`api/` (Backend)**: API REST simples feita com Express. Possui rota de verificação (`/health`) e rotas para listar e cadastrar doações (`/api/doacoes`). Os dados ficam salvos em memória e as regras de validação (e-mail, valores e tipos de pagamento) ficam isoladas em `src/validacao.js`.
 
