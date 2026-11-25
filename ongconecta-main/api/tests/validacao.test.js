@@ -39,4 +39,10 @@ describe('validarDoacao', () => {
   test('corpo ausente é rejeitado', () => {
     expect(validarDoacao(null)).toEqual(['corpo da requisição inválido']);
   });
+
+  test('nome com menos de 2 caracteres é rejeitado', () => {
+    expect(validarDoacao({ ...valida, nome: 'A' })).toContain(
+      'nome é obrigatório (mínimo 2 caracteres)',
+    );
+  });
 });

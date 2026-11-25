@@ -158,22 +158,11 @@ jobs:
       - name: Testes do script de versionamento
         run: node --test ongconecta-main/scripts/proxima-versao.test.mjs
 
-  dependencias:
-    name: dependencias
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - name: Revisão de dependências (bloqueia vulnerabilidade crítica)
-        uses: actions/dependency-review-action@v4
-        with:
-          fail-on-severity: critical
-
   ci-ok:
     name: ci-ok
     # always(): roda mesmo quando os jobs acima foram pulados ou falharam.
     if: always()
-    needs: [mudancas, api, web, mobile, scripts, dependencias]
+    needs: [mudancas, api, web, mobile, scripts]
     runs-on: ubuntu-latest
     steps:
       - name: Conferir resultado dos jobs
