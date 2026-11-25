@@ -1,0 +1,190 @@
+# Integração Contínua — PGC seção 5 (Aula 2)
+#
+# Roda em todo Pull Request para a main. Cada pasta dentro de ongconecta-main/
+# (api, web, mobile) só é testada quando muda; alterações em .github/ ou scripts/
+# disparam todos os módulos.
+#
+# IMPORTANTE para a proteção da branch main:
+# marque como obrigatórios SOMENTE os checks "ci-ok" e "titulo-pr".
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch: # permite rodar manualmente pela aba Actions
+
+# Um novo push no mesmo PR cancela a execução anterior (economiza minutos).
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  mudancas:
+    name: Detectar pastas alteradas
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      api: ${{ steps.filtro.outputs.api }}
+      web: ${{ steps.filtro.outputs.web }}
+      mobile: ${{ steps.filtro.outputs.mobile }}
+      infra: ${{ steps.filtro.outputs.infra }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
+        id: filtro
+        with:
+          filters: |
+            api:
+              - 'ongconecta-main/api/**'
+            web:
+              - 'ongconecta-main/web/**'
+            mobile:
+              - 'ongconecta-main/mobile/**'
+            infra:
+              - '.github/**'
+              - 'ongconecta-main/scripts/**'
+
+  api:
+    name: api
+    needs: mudancas
+    if: needs.mudancas.outputs.api == 'true' || needs.mudancas.outputs.infra == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ongconecta-main/api
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ongconecta-main/api/package-lock.json
+      - name: Instalar dependências (exatamente as do lockfile)
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Testes + quality gate de cobertura (>= 60%)
+        run: npm run test:coverage
+      - name: Análise de dependências (SCA) — bloqueia vulnerabilidade crítica
+        run: npm audit --omit=dev --audit-level=critical
+      - name: Publicar relatório de cobertura
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cobertura-api
+          path: ongconecta-main/api/coverage/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  web:
+    name: web
+    needs: mudancas
+    if: needs.mudancas.outputs.web == 'true' || needs.mudancas.outputs.infra == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ongconecta-main/web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ongconecta-main/web/package-lock.json
+      - name: Instalar dependências (exatamente as do lockfile)
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Testes + quality gate de cobertura (>= 60%)
+        run: npm run test:coverage
+      - name: Análise de dependências (SCA) — bloqueia vulnerabilidade crítica
+        run: npm audit --omit=dev --audit-level=critical
+      - name: Build
+        run: npm run build
+      - name: Publicar build para revisão (baixe na aba Actions)
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-pr-${{ github.event.pull_request.number || 'manual' }}
+          path: ongconecta-main/web/dist/
+          retention-days: 7
+
+  mobile:
+    name: mobile
+    needs: mudancas
+    if: needs.mudancas.outputs.mobile == 'true' || needs.mudancas.outputs.infra == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ongconecta-main/mobile
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: ongconecta-main/mobile/package-lock.json
+      - name: Instalar dependências (exatamente as do lockfile)
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Testes + quality gate de cobertura (>= 60%)
+        run: npm run test:coverage
+      - name: Análise de dependências (SCA) — bloqueia vulnerabilidade crítica
+        run: npm audit --omit=dev --audit-level=critical
+      - name: Build do bundle Android (valida que o app compila, sem conta Expo)
+        run: npm run bundle
+        env:
+          EXPO_OFFLINE: '1'
+
+  scripts:
+    name: scripts
+    needs: mudancas
+    if: needs.mudancas.outputs.infra == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Testes do script de versionamento
+        run: node --test ongconecta-main/scripts/proxima-versao.test.mjs
+
+  dependencias:
+    name: dependencias
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Revisão de dependências (bloqueia vulnerabilidade crítica)
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: critical
+
+  ci-ok:
+    name: ci-ok
+    # always(): roda mesmo quando os jobs acima foram pulados ou falharam.
+    if: always()
+    needs: [mudancas, api, web, mobile, scripts, dependencias]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Conferir resultado dos jobs
+        env:
+          RESULTADOS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Resultados: $RESULTADOS"
+          for r in $RESULTADOS; do
+            if [ "$r" = "failure" ] || [ "$r" = "cancelled" ]; then
+              echo "::error::Algum job do CI falhou — merge bloqueado (PGC 5.2)."
+              exit 1
+            fi
+          done
+          echo "Todos os jobs necessários passaram ou foram pulados por não haver mudança."
