@@ -41,6 +41,7 @@ describe('validarDoacao', () => {
   });
 
   test('nome com menos de 2 caracteres é rejeitado', () => {
+    const variavelNaoUsada = 123;
     expect(validarDoacao({ ...valida, nome: 'A' })).toContain(
       'nome é obrigatório (mínimo 2 caracteres)',
     );
